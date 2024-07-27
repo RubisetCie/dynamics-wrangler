@@ -9,10 +9,10 @@ override LDFLAGS +=
 
 # Source files
 SRC_FILES = \
-	src/main.c \
-	src/dynamic.c \
-	src/elffile.c \
-	src/ldcache.c
+	main.c \
+	dynamic.c \
+	elffile.c \
+	ldcache.c
 
 # Installation prefix
 PREFIX = /usr/local
@@ -25,8 +25,8 @@ $(TARGET): $(SRC_FILES)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 install:
-	mkdir -p $(PREFIX)
-	cp $(TARGET) $(PREFIX)/bin
+	mkdir -p $(PREFIX)/bin
+	cp $(TARGET) $(PREFIX)/bin/
 
 uninstall:
 	rm -f $(PREFIX)/bin/$(TARGET)
