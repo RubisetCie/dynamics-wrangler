@@ -115,7 +115,7 @@ int main(int argc, char *const argv[])
     /* If no files are specified */
     if (filename == NULL)
     {
-        fputs("No files specified!\n", stderr);
+        usage(argv[0]);
         return 2;
     }
 
