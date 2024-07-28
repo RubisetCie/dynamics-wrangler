@@ -449,11 +449,12 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     }
 
     /* If no concerned sections have been found yet, try the DT_DEBUG ones */
-    if (slotnum > 0)
+    while (slotnum > 0)
     {
         if (soname > REMOVAL && !somod)
         {
             somod = 1;
+            slotnum--;
 
             /* Pick the slot with the maximum length */
             l = slotlen[0] < slotlen[1] ? 1 : 0;
@@ -474,9 +475,10 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                 write_string(name, soname, len, available);
             }
         }
-        if (rpath > REMOVAL && !rmod)
+        else if (rpath > REMOVAL && !rmod)
         {
             rmod = 1;
+            slotnum--;
 
             /* Pick the slot with the maximum length */
             l = slotlen[0] < slotlen[1] ? 1 : 0;
