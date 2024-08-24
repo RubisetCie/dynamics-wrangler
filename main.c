@@ -12,17 +12,17 @@
 
 static void usage(char *progname)
 {
-    printf("Usage: %s [<options>] <elf-file>\n\n \
-Options:\n \
-  -s,--soname         : Replace (or remove) the soname\n \
-  -r,--rpath          : Replace (or remove) the run-time path\n \
-  -n,--replace        : Replace needed dependency by one with another name\n \
-     --priority-low   : Change the run-time path priority: system libs are above\n \
-     --priority-high  : Change the run-time path priority: system libs are below \n \
-  -o,--output         : Output file\n \
-  -h,--help           : Show help usage\n\n \
-In order to replace needed dependency, supply two names:\n Example:\n \
-  -n <old-name> <new-name>\n\n \
+    printf("Usage: %s [<options>] <elf-file>\n\n\
+Options:\n\
+  -s,--soname         : Replace (or remove) the soname\n\
+  -r,--rpath          : Replace (or remove) the run-time path\n\
+  -n,--replace        : Replace needed dependency by one with another name\n\
+     --priority-low   : Change the run-time path priority: system libs are above\n\
+     --priority-high  : Change the run-time path priority: system libs are below \n\
+  -o,--output         : Output file\n\
+  -h,--help           : Show help usage\n\n\
+In order to replace needed dependency, supply two names:\n Example:\n\
+  -n <old-name> <new-name>\n\n\
 In order to remove soname or run-time path, don't supply a name after the parameter.\n\n", progname);
 }
 
