@@ -5,7 +5,7 @@ CC = gcc
 override CFLAGS += -ansi
 
 # Linker flags
-override LDFLAGS +=
+override LDFLAGS += -flto
 
 # Source files
 SRC_FILES = \
