@@ -162,7 +162,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     /* Open the output file */
     if (output && (needOld || soname || rpath))
     {
-        if ((out = open(output, O_WRONLY | O_CREAT | O_TRUNC)) == -1)
+        if ((out = open(output, O_WRONLY | O_CREAT | O_TRUNC, 600)) == -1)
         {
             fprintf(stderr, "Failed to open the output file: %s!\n", strerror(errno));
             rv = 4; goto RET;
