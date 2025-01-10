@@ -158,7 +158,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     size_t phdrlen, shdrlen, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
     char *dyns = NULL, *strtab = NULL, *name;
     int in = -1, out = -1, rv = 0, dynsmod = 0, needmod = 0, somod = 0, rmod = 0, i, j, l, last;
-    const int modifications = (needOld || soname || rpath || fix);
+    const int modifications = (needOld || soname || rpath || fix > 1);
 
     /* Open the output file */
     if (output && modifications)
@@ -245,11 +245,13 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
         printf("Processing file: %s\n", filename);
         last = -2;
     }
-    else
+    else if (fix == 0)
     {
         printf("[ELF dynamic table informations]\n  File: %s\n", filename);
         last = -1;
     }
+    else
+        last = -2;
 
     /* The 'removed' dynamic entries are actually turned into type DT_DEBUG.
      * Since the debug sections are vastly unused.
@@ -506,7 +508,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     }
 
     /* Perform late automatic fixing, if requested */
-    if (fix && ldcache != NULL)
+    if (fix != 0 && ldcache != NULL)
     {
         i = 0;
         while (i < phdrlen)
@@ -531,11 +533,17 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     continue;
                 }
 
-                needmod = 1;
-                printf("Fixing needed: %s => %s...\n", name, newName);
+                /* Whether the fix is actually performed, or just dry-run */
+                if (fix > 1)
+                {
+                    needmod = 1;
+                    printf("Fixing needed: %s => %s...\n", name, newName);
 
-                /* Write in the string table */
-                write_string(name, newName, strlen(newName), available);
+                    /* Write in the string table */
+                    write_string(name, newName, strlen(newName), available);
+                }
+                else
+                    printf("Replacement found: %s => %s...\n", name, newName);
             }
             else
                 ADV(i, 2);

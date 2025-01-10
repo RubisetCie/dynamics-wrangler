@@ -17,7 +17,8 @@ Options:\n\
   -s,--soname         : Replace (or remove) the soname\n\
   -r,--rpath          : Replace (or remove) the run-time path\n\
   -n,--replace        : Replace needed dependency by one with another name\n\
-     --fix-depends    : Perform automatic fixing of missing dependency\n\
+     --replace-deps   : Perform replacement searching for missing dependencies\n\
+     --repair-deps    : Perform repair on dependencies (don't run on system packages)\n\
      --priority-low   : Change the run-time path priority: system libs are above\n\
      --priority-high  : Change the run-time path priority: system libs are below \n\
   -d,--query-depends  : Query the dependencies needed (non-recursive)\n\
@@ -108,8 +109,10 @@ int main(int argc, char *const argv[])
             priority = PRI_RUNPATH;
         else if (strcmp(arg, "--priority-high") == 0)
             priority = PRI_RPATH;
-        else if (strcmp(arg, "--fix-depends") == 0)
+        else if (strcmp(arg, "--replace-deps") == 0)
             fix = 1;
+        else if (strcmp(arg, "--repair-deps") == 0)
+            fix = 2;
         else if (arg[0] == '-')
         {
             fprintf(stderr, "Unrecognized parameter: %s\n", arg);
@@ -148,7 +151,7 @@ int main(int argc, char *const argv[])
         return dynamics_query(filename, query);
 
     /* Read the LD cache, to warn the user about whether a library is found or not */
-    if (needNew != NULL || fix)
+    if (needNew != NULL || fix != 0)
         ldcache = ldcache_parse("/etc/ld.so.cache");
 
     i = dynamics_process(ldcache, priority, filename, output, needOld, needNew, soname, rpath, fix);
