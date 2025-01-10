@@ -158,9 +158,10 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     size_t phdrlen, shdrlen, len, available, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
     char *dyns = NULL, *strtab = NULL, *name;
     int in = -1, out = -1, rv = 0, dynsmod = 0, needmod = 0, somod = 0, rmod = 0, i, j, l, last;
+    const int needout = (needOld || soname || rpath);
 
     /* Open the output file */
-    if (output && (needOld || soname || rpath))
+    if (output && needout)
     {
         if ((out = open(output, O_WRONLY | O_CREAT | O_TRUNC, 600)) == -1)
         {
@@ -239,7 +240,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     }
 
     /* If no modifications have to be done, just print infos about the dynamics */
-    if (needOld || soname || rpath)
+    if (needout)
     {
         printf("Processing file: %s\n", filename);
         last = -2;
@@ -254,32 +255,35 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
      * Since the debug sections are vastly unused.
      * Do a first pass to list all debug sections.
      */
-    i = 0;
-    while (i < phdrlen)
+    if (soname > REMOVAL || rpath > REMOVAL)
     {
-        switch (SWAPS(&dyns[i]))
+        i = 0;
+        while (i < phdrlen)
         {
-            case DT_DEBUG:
-                /* Check if the value points outside of the string table (which may be) */
-                if (SWAPU(&dyns[i]) > shdrlen)
-                    goto DEFAULT;
+            switch (SWAPS(&dyns[i]))
+            {
+                case DT_DEBUG:
+                    /* Check if the value points outside of the string table (which may be) */
+                    if (SWAPU(&dyns[i]) > shdrlen)
+                        goto DEFAULT;
 
-                /* Pick the slot with the minimum current length */
-                l = slotlen[0] > slotlen[1] ? 1 : 0;
-                slots[l] = i;
-                ADV(i, 1);
-                slotstr[l] = SWAPU(&dyns[i]);
-                name = &strtab[SWAPU(&dyns[i])];
-                ADV(i, 1);
+                    /* Pick the slot with the minimum current length */
+                    l = slotlen[0] > slotlen[1] ? 1 : 0;
+                    slots[l] = i;
+                    ADV(i, 1);
+                    slotstr[l] = SWAPU(&dyns[i]);
+                    name = &strtab[SWAPU(&dyns[i])];
+                    ADV(i, 1);
 
-                /* Compute the available length of the slot */
-                slotlen[l] = available_length(name, shdrlen - (name - strtab));
-                slotnum++;
-                break;
-          DEFAULT:
-            default:
+                    /* Compute the available length of the slot */
+                    slotlen[l] = available_length(name, shdrlen - (name - strtab));
+                    slotnum++;
+                    break;
+              DEFAULT:
+                default:
                 ADV(i, 2);
-                break;
+                    break;
+            }
         }
     }
 

@@ -23,7 +23,7 @@ Options:\n\
   -h,--help           : Show help usage\n\n\
 In order to replace needed dependency, supply two names:\n Example:\n\
   -n <old-name> <new-name>\n\n\
-In order to remove soname or run-time path, don't supply a name after the parameter.\n\n", progname);
+In order to remove soname or run-time path, don't supply a name after the parameter.\n", progname);
 }
 
 int main(int argc, char *const argv[])
