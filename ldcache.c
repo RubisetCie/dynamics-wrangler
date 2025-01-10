@@ -174,11 +174,17 @@ LD_Cache* ldcache_parse(const char *filename)
     return cache;
 }
 
-char* ldcache_search(const LD_Cache *cache, const char *name)
+const char* ldcache_search(const LD_Cache *cache, const char *name)
 {
     size_t i;
 
-    /* Search for the name in the cache */
+    /* Search for the name in the cache
+     *
+     * Note: Binary search would have been more efficient.
+     * However, I didn't find the guarantee that the ldcache would always be sorted...
+     *
+     * So it's a classic linear search.
+     */
     for (i = 0; i < cache->length; i++)
     {
         if (strcmp(cache->entries[i].name, name) == 0)
@@ -187,6 +193,35 @@ char* ldcache_search(const LD_Cache *cache, const char *name)
 
     /* Return NULL if nothing was found */
     return NULL;
+}
+
+const char* ldcache_replacement(const LD_Cache *cache, const char *name, size_t available)
+{
+    size_t i, j, b = 0;
+    char c;
+    const char *cacheName, *best = NULL;
+
+    /* Search for a name in the cache, that is the closest to the original,
+     * without being an exact match, nor being longer than available */
+    for (i = 0; i < cache->length; i++)
+    {
+        cacheName = cache->entries[i].name;
+        j = 0;
+        do
+        {
+            c = cacheName[j];
+            if (c != name[j])
+                break;
+            j++;
+        } while (c != 0 && j < available);
+
+        if (j > b)
+        {
+            b = j;
+            best = cacheName;
+        }
+    }
+    return best;
 }
 
 void ldcache_free(LD_Cache *cache)

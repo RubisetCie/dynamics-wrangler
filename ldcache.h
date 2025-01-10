@@ -23,7 +23,8 @@ typedef struct
 } LD_Cache;
 
 LD_Cache* ldcache_parse(const char *filename);
-char* ldcache_search(const LD_Cache *cache, const char *name);
+const char* ldcache_search(const LD_Cache *cache, const char *name);
+const char* ldcache_replacement(const LD_Cache *cache, const char *name, size_t available);
 void ldcache_free(LD_Cache *cache);
 
 #endif

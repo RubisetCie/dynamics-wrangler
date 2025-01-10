@@ -150,18 +150,18 @@ static int write_input_to_output_end(int in, int out)
     return 1;
 }
 
-int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath)
+int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix)
 {
     Elf_Header ehdr;
     Elf_Section shdr;
     Elf_Program phdr;
-    size_t phdrlen, shdrlen, len, available, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
+    size_t phdrlen, shdrlen, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
     char *dyns = NULL, *strtab = NULL, *name;
     int in = -1, out = -1, rv = 0, dynsmod = 0, needmod = 0, somod = 0, rmod = 0, i, j, l, last;
-    const int needout = (needOld || soname || rpath);
+    const int modifications = (needOld || soname || rpath || fix);
 
     /* Open the output file */
-    if (output && needout)
+    if (output && modifications)
     {
         if ((out = open(output, O_WRONLY | O_CREAT | O_TRUNC, 600)) == -1)
         {
@@ -240,7 +240,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     }
 
     /* If no modifications have to be done, just print infos about the dynamics */
-    if (needout)
+    if (modifications)
     {
         printf("Processing file: %s\n", filename);
         last = -2;
@@ -317,8 +317,8 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     needmod = 1;
 
                     /* Compute the available length in the string table */
-                    len = strlen(needNew);
-                    available = available_length(name, shdrlen - (name - strtab));
+                    const size_t len = strlen(needNew);
+                    const size_t available = available_length(name, shdrlen - (name - strtab));
                     if (len > available)
                     {
                         fputs("The new name is too big to fit!\n", stderr);
@@ -331,7 +331,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     if (ldcache != NULL)
                     {
                         if (ldcache_search(ldcache, needNew) == NULL)
-                            fprintf(stderr, "Warning! The library name %s is not found in the cache!\nYou may want to run `ldconfig`.\n", needNew);
+                            fprintf(stderr, "Warning! The library name %s was not found in the cache!\nYou may want to run `ldconfig`.\n", needNew);
                     }
 
                     /* Write in the string table */
@@ -370,8 +370,8 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     }
 
                     /* Compute the available length in the string table */
-                    len = strlen(soname);
-                    available = available_length(name, shdrlen - (name - strtab));
+                    const size_t len = strlen(soname);
+                    const size_t available = available_length(name, shdrlen - (name - strtab));
                     if (len > available)
                     {
                         fputs("The new soname is too big to fit!\n", stderr);
@@ -432,8 +432,8 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     }
 
                     /* Compute the available length in the string table */
-                    len = strlen(rpath);
-                    available = available_length(name, shdrlen - (name - strtab));
+                    const size_t len = strlen(rpath);
+                    const size_t available = available_length(name, shdrlen - (name - strtab));
                     if (len > available)
                     {
                         fputs("The new run-time path is too big to fit!\n", stderr);
@@ -464,8 +464,8 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
             l = slotlen[0] < slotlen[1] ? 1 : 0;
 
             /* Compute the available length in the string table */
-            len = strlen(soname);
-            available = slotlen[l];
+            const size_t len = strlen(soname);
+            const size_t available = slotlen[l];
             if (len > available)
                 fputs("The new run-time path is too big to fit!\n", stderr);
             else
@@ -488,8 +488,8 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
             l = slotlen[0] < slotlen[1] ? 1 : 0;
 
             /* Compute the available length in the string table */
-            len = strlen(rpath);
-            available = slotlen[l];
+            const size_t len = strlen(rpath);
+            const size_t available = slotlen[l];
             if (len > available)
                 fputs("The new run-time path is too big to fit!\n", stderr);
             else
@@ -505,8 +505,45 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
         }
     }
 
+    /* Perform late automatic fixing, if requested */
+    if (fix && ldcache != NULL)
+    {
+        i = 0;
+        while (i < phdrlen)
+        {
+            if (SWAPS(&dyns[i]) == DT_NEEDED)
+            {
+                /* Retrieve the library name */
+                ADV(i, 1);
+                name = &strtab[SWAPU(&dyns[i])];
+                ADV(i, 1);
+
+                /* Search it in the cache */
+                if (ldcache_search(ldcache, name) != NULL)
+                    continue;
+
+                /* Find the closest library matching it's name and being slim enough */
+                const size_t available = available_length(name, shdrlen - (name - strtab));
+                const char *newName = ldcache_replacement(ldcache, name, available);
+                if (newName == NULL)
+                {
+                    fprintf(stderr, "Failed to find a replacement for %s\n", name);
+                    continue;
+                }
+
+                needmod = 1;
+                printf("Fixing needed: %s => %s...\n", name, newName);
+
+                /* Write in the string table */
+                write_string(name, newName, strlen(newName), available);
+            }
+            else
+                ADV(i, 2);
+        }
+    }
+
     /* Write the output file */
-    if ((needOld && needmod) || (soname && somod) || (rpath && rmod))
+    if (needmod || somod || rmod)
     {
         if (out == -1)
         {
