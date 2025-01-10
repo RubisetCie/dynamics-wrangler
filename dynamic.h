@@ -20,6 +20,15 @@ typedef enum
     PRI_RPATH
 } Priority;
 
+typedef enum
+{
+    QU_NOTHING,
+    QU_NEEDED,
+    QU_SONAME,
+    QU_RPATH
+} Query;
+
 int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath);
+int dynamics_query(const char *filename, const Query query);
 
 #endif

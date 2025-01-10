@@ -620,3 +620,104 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
 
     return rv;
 }
+
+int dynamics_query(const char *filename, const Query query)
+{
+    Elf_Header ehdr;
+    Elf_Section shdr;
+    Elf_Program phdr;
+    size_t phdrlen, shdrlen;
+    char *dyns = NULL, *strtab = NULL, *name;
+    int in = -1, rv = 0, i, once, type, typealt;
+
+    /* Open the input ELF file */
+    if ((in = elf_open(filename, O_RDONLY, &ehdr)) == -1)
+        return 3;
+
+    /* Find the dynamic section */
+    if (elf_find_program(in, PT_DYNAMIC, &ehdr, &phdr) != 0)
+    {
+        rv = 3;
+        goto RET;
+    }
+
+    /* Allocate the dynamic section */
+    phdrlen = HDRWU(phdr, p_filesz);
+    if ((dyns = malloc(phdrlen)) == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for dynamic section: %s!\n", strerror(errno));
+        rv = 3; goto RET;
+    }
+
+    /* Read the dynamic section */
+    memset(dyns, 0, phdrlen);
+    if (lseek(in, HDRWU(phdr, p_offset), SEEK_SET) == -1
+      || read(in, dyns, phdrlen) != (ssize_t)phdrlen)
+    {
+        fprintf(stderr, "Failed to read dynamic section: %s!\n", strerror(errno));
+        rv = 3; goto RET;
+    }
+
+    /* Find the string table section */
+    if (elf_find_section(in, SHT_STRTAB, &ehdr, &shdr) != 0)
+    {
+        rv = 3;
+        goto RET;
+    }
+
+    /* Allocate the dynamic section */
+    shdrlen = HDRWU(shdr, sh_size);
+    if ((strtab = malloc(shdrlen)) == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for string table: %s!\n", strerror(errno));
+        rv = 3; goto RET;
+    }
+
+    /* Read the dynamic section */
+    memset(strtab, 0, shdrlen);
+    if (lseek(in, HDRWU(shdr, sh_offset), SEEK_SET) == -1
+      || read(in, strtab, shdrlen) != (ssize_t)shdrlen)
+    {
+        fprintf(stderr, "Failed to read string table: %s!\n", strerror(errno));
+        rv = 3; goto RET;
+    }
+
+    /* Determine the query type */
+    switch (query)
+    {
+        case QU_NEEDED: type = typealt = DT_NEEDED; once = 0; break;
+        case QU_SONAME: type = typealt = DT_SONAME; once = 1; break;
+        case QU_RPATH: type = DT_RPATH; typealt = DT_RUNPATH; once = 1; break;
+        default: rv = 5; goto RET;
+    }
+
+    /* Query the dynamic entries */
+    i = 0;
+    while (i < phdrlen)
+    {
+        const int t = SWAPS(&dyns[i]);
+        if (t == type || t == typealt)
+        {
+            /* Write the raw output */
+            ADV(i, 1);
+            name = &strtab[SWAPU(&dyns[i])];
+            ADV(i, 1);
+            puts(name);
+
+            /* If only one can be present */
+            if (once)
+                break;
+        }
+        else
+            ADV(i, 2);
+    }
+
+  RET:
+    if (in != -1)
+        elf_close(in);
+
+    free(strtab);
+    free(dyns);
+
+    return rv;
+}

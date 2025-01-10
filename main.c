@@ -19,6 +19,9 @@ Options:\n\
   -n,--replace        : Replace needed dependency by one with another name\n\
      --priority-low   : Change the run-time path priority: system libs are above\n\
      --priority-high  : Change the run-time path priority: system libs are below \n\
+  -d,--query-depends  : Query the dependencies needed (non-recursive)\n\
+     --query-soname   : Query the soname\n\
+     --query-rpath    : Query the run-time path\n\
   -o,--output         : Output file\n\
   -h,--help           : Show help usage\n\n\
 In order to replace needed dependency, supply two names:\n Example:\n\
@@ -37,6 +40,7 @@ int main(int argc, char *const argv[])
     const char *filename = NULL;
     LD_Cache *ldcache = NULL;
     Priority priority = PRI_UNCHANGED;
+    Query query = QU_NOTHING;
 
     /* Checks the arguments */
     while (i < argc)
@@ -92,6 +96,13 @@ int main(int argc, char *const argv[])
             else
                 output = argv[i++];
         }
+        else if (strcmp(arg, "-d") == 0 ||
+                 strcmp(arg, "--query-depends") == 0)
+            query = QU_NEEDED;
+        else if (strcmp(arg, "--query-soname") == 0)
+            query = QU_SONAME;
+        else if (strcmp(arg, "--query-rpath") == 0)
+            query = QU_RPATH;
         else if (strcmp(arg, "--priority-low") == 0)
             priority = PRI_RUNPATH;
         else if (strcmp(arg, "--priority-high") == 0)
@@ -128,6 +139,10 @@ int main(int argc, char *const argv[])
             return 2;
         }
     }
+
+    /* If a simple query is selected */
+    if (query != QU_NOTHING)
+        return dynamics_query(filename, query);
 
     /* Read the LD cache, to warn the user about whether a library is found or not */
     if (needNew != NULL)
