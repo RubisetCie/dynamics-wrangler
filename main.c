@@ -17,13 +17,14 @@ Options:\n\
   -s,--soname         : Replace (or remove) the soname\n\
   -r,--rpath          : Replace (or remove) the run-time path\n\
   -n,--replace        : Replace needed dependency by one with another name\n\
-     --replace-deps   : Perform replacement searching for missing dependencies\n\
      --repair-deps    : Perform repair on dependencies (don't run on system packages)\n\
      --priority-low   : Change the run-time path priority: system libs are above\n\
      --priority-high  : Change the run-time path priority: system libs are below \n\
   -d,--query-depends  : Query the dependencies needed (non-recursive)\n\
+     --query-missing  : Query the missing dependencies\n\
      --query-soname   : Query the soname\n\
      --query-rpath    : Query the run-time path\n\
+     --query-replace  : Query a potential replacement for a specified library name\n\
   -o,--output         : Output file\n\
   -h,--help           : Show help usage\n\n\
 In order to replace needed dependency, supply two names:\n Example:\n\
@@ -101,16 +102,18 @@ int main(int argc, char *const argv[])
         else if (strcmp(arg, "-d") == 0 ||
                  strcmp(arg, "--query-depends") == 0)
             query = QU_NEEDED;
+        else if (strcmp(arg, "--query-missing") == 0)
+            query = QU_MISSING;
         else if (strcmp(arg, "--query-soname") == 0)
             query = QU_SONAME;
         else if (strcmp(arg, "--query-rpath") == 0)
             query = QU_RPATH;
+        else if (strcmp(arg, "--query-replace") == 0)
+            query = QU_REPLACEMENT;
         else if (strcmp(arg, "--priority-low") == 0)
             priority = PRI_RUNPATH;
         else if (strcmp(arg, "--priority-high") == 0)
             priority = PRI_RPATH;
-        else if (strcmp(arg, "--replace-deps") == 0)
-            fix = 1;
         else if (strcmp(arg, "--repair-deps") == 0)
             fix = 2;
         else if (arg[0] == '-')
@@ -146,15 +149,15 @@ int main(int argc, char *const argv[])
         }
     }
 
-    /* If a simple query is selected */
-    if (query != QU_NOTHING)
-        return dynamics_query(filename, query);
-
-    /* Read the LD cache, to warn the user about whether a library is found or not */
-    if (needNew != NULL || fix != 0)
+    /* Read the LD cache, to determine whether a library is found or not */
+    if (needNew != NULL || query == QU_MISSING || query == QU_REPLACEMENT || fix != 0)
         ldcache = ldcache_parse("/etc/ld.so.cache");
 
-    i = dynamics_process(ldcache, priority, filename, output, needOld, needNew, soname, rpath, fix);
+    /* If a simple query is selected */
+    if (query != QU_NOTHING)
+        i = dynamics_query(ldcache, filename, query);
+    else
+        i = dynamics_process(ldcache, priority, filename, output, needOld, needNew, soname, rpath, fix);
 
     if (ldcache != NULL)
         ldcache_free(ldcache);

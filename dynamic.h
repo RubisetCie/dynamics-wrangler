@@ -24,11 +24,13 @@ typedef enum
 {
     QU_NOTHING,
     QU_NEEDED,
+    QU_MISSING,
     QU_SONAME,
-    QU_RPATH
+    QU_RPATH,
+    QU_REPLACEMENT
 } Query;
 
 int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix);
-int dynamics_query(const char *filename, const Query query);
+int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query query);
 
 #endif

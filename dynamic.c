@@ -526,24 +526,27 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
 
                 /* Find the closest library matching it's name and being slim enough */
                 const size_t available = available_length(name, shdrlen - (name - strtab));
-                const char *newName = ldcache_replacement(ldcache, name, available);
+                const char *newName = ldcache_replacement(ldcache, name);
                 if (newName == NULL)
                 {
                     fprintf(stderr, "Failed to find a replacement for %s\n", name);
                     continue;
                 }
+                if (strlen(newName) > available)
+                {
+                    fputs("The replacement found was too big to fit!\n", stderr);
+                    continue;
+                }
 
                 /* Whether the fix is actually performed, or just dry-run */
-                if (fix > 1)
-                {
-                    needmod = 1;
-                    printf("Fixing needed: %s => %s...\n", name, newName);
+                /*if (fix == 1)
+                    printf("Replacement found: %s => %s...\n", name, newName);*/
 
-                    /* Write in the string table */
-                    write_string(name, newName, strlen(newName), available);
-                }
-                else
-                    printf("Replacement found: %s => %s...\n", name, newName);
+                needmod = 1;
+                printf("Fixing needed: %s => %s...\n", name, newName);
+
+                /* Write in the string table */
+                write_string(name, newName, strlen(newName), available);
             }
             else
                 ADV(i, 2);
@@ -666,14 +669,28 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     return rv;
 }
 
-int dynamics_query(const char *filename, const Query query)
+int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query query)
 {
     Elf_Header ehdr;
     Elf_Section shdr;
     Elf_Program phdr;
     size_t phdrlen, shdrlen;
-    char *dyns = NULL, *strtab = NULL, *name;
+    char *dyns = NULL, *strtab = NULL;
+    const char *name;
     int in = -1, rv = 0, i, once, type, typealt;
+
+    /* If the query is about a library name, no need to open the input file */
+    if (query == QU_REPLACEMENT)
+    {
+        name = ldcache_replacement(ldcache, filename);
+        if (name)
+        {
+            puts(name);
+            return 0;
+        }
+        fprintf(stderr, "Failed to find a replacement for %s\n", filename);
+        return 5;
+    }
 
     /* Open the input ELF file */
     if ((in = elf_open(filename, O_RDONLY, &ehdr)) == -1)
@@ -730,6 +747,7 @@ int dynamics_query(const char *filename, const Query query)
     /* Determine the query type */
     switch (query)
     {
+        case QU_MISSING: /* Fall below */
         case QU_NEEDED: type = typealt = DT_NEEDED; once = 0; break;
         case QU_SONAME: type = typealt = DT_SONAME; once = 1; break;
         case QU_RPATH: type = DT_RPATH; typealt = DT_RUNPATH; once = 1; break;
@@ -743,10 +761,16 @@ int dynamics_query(const char *filename, const Query query)
         const int t = SWAPS(&dyns[i]);
         if (t == type || t == typealt)
         {
-            /* Write the raw output */
+            /* Retrieve the library name */
             ADV(i, 1);
             name = &strtab[SWAPU(&dyns[i])];
             ADV(i, 1);
+
+            /* If the library is found in the cache, don't print it */
+            if (ldcache != NULL && ldcache_search(ldcache, name) != NULL)
+                continue;
+
+            /* Write the raw output */
             puts(name);
 
             /* If only one can be present */

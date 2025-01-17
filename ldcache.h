@@ -24,7 +24,7 @@ typedef struct
 
 LD_Cache* ldcache_parse(const char *filename);
 const char* ldcache_search(const LD_Cache *cache, const char *name);
-const char* ldcache_replacement(const LD_Cache *cache, const char *name, size_t available);
+const char* ldcache_replacement(const LD_Cache *cache, const char *name);
 void ldcache_free(LD_Cache *cache);
 
 #endif

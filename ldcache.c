@@ -34,7 +34,7 @@ typedef struct
     uint64_t hwcap;
 } Entry;
 
-off_t align(int fd, size_t alignment)
+static off_t align(int fd, size_t alignment)
 {
     const off_t pos = lseek(fd, 0, SEEK_CUR);
     const size_t align = (size_t)pos % alignment;
@@ -47,7 +47,7 @@ off_t align(int fd, size_t alignment)
     return lseek(fd, alignment - align, SEEK_CUR);
 }
 
-size_t length(int fd)
+static size_t length(int fd)
 {
     const off_t pos = lseek(fd, 0, SEEK_CUR);
     char c;
@@ -63,6 +63,20 @@ size_t length(int fd)
 
     lseek(fd, pos, SEEK_SET);
     return n;
+}
+
+static size_t base(const char *str)
+{
+    size_t i = 0;
+    const size_t len = strlen(str);
+
+    /* Extract the "main" part ot the library name */
+    for (; i < len; i++)
+    {
+        if (str[i] == '.')
+            break;
+    }
+    return i;
 }
 
 LD_Cache* ldcache_parse(const char *filename)
@@ -195,33 +209,28 @@ const char* ldcache_search(const LD_Cache *cache, const char *name)
     return NULL;
 }
 
-const char* ldcache_replacement(const LD_Cache *cache, const char *name, size_t available)
+const char* ldcache_replacement(const LD_Cache *cache, const char *name)
 {
-    size_t i, j, b = 0;
-    char c;
-    const char *cacheName, *best = NULL;
+    size_t i;
 
-    /* Search for a name in the cache, that is the closest to the original,
-     * without being an exact match, nor being longer than available */
+    /* Extract the "main" part ot the name */
+    const size_t s = base(name);
+
+    /* Search for a name in the cache, that is the close to the original */
     for (i = 0; i < cache->length; i++)
     {
-        cacheName = cache->entries[i].name;
-        j = 0;
-        do
-        {
-            c = cacheName[j];
-            if (c != name[j])
-                break;
-            j++;
-        } while (c != 0 && j < available);
-
-        if (j > b)
-        {
-            b = j;
-            best = cacheName;
-        }
+        const char *cacheName = cache->entries[i].name;
+        if (s != base(cacheName))
+            continue;
+        if (strncmp(cacheName, name, s) != 0)
+            continue;
+        if (strcmp(cacheName, name) == 0)
+            continue;
+        return cacheName;
     }
-    return best;
+
+    /* No replacement have been found */
+    return NULL;
 }
 
 void ldcache_free(LD_Cache *cache)
