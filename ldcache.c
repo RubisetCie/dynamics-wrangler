@@ -79,12 +79,61 @@ static size_t base(const char *str)
     return i;
 }
 
+static const char* occurence(const char *str, const char *find)
+{
+    char c;
+    const char sc = *find;
+    const size_t l = strlen(find);
+
+    do
+    {
+        if ((c = *str) == sc)
+        {
+            if (strncmp(str, find, l) == 0)
+                return str;
+        }
+        str++;
+    } while (c != 0 && c != ':');
+
+    return NULL;
+}
+
+static void rpath_origin(const char *origin, const char *path, char *dest, const size_t len)
+{
+    const char *sub = occurence(path, "$ORIGIN");
+    size_t i = 0;
+
+    if (sub != NULL)
+    {
+        const size_t origlen = sub - path;
+        const size_t baselen = strrchr(origin, '/') - origin; /* The origin has to have a '/', since we handled that case in main */
+
+        /* Replace the special variable $ORIGIN with the location of the file */
+        memcpy(dest, path, origlen); i += origlen;
+        memcpy(dest + i, origin, baselen); i += baselen;
+        memcpy(dest + i, sub + 7, len - i);
+    }
+    else
+        memcpy(dest, path, len);
+
+    dest[len - i] = 0;
+}
+
+static int search_file_dir(const char *path, const char *name)
+{
+    char fullpath[PATH_MAX];
+    strcpy(fullpath, path);
+    strcat(fullpath, "/");
+    strcat(fullpath, name);
+    return access(fullpath, F_OK) == 0;
+}
+
 LD_Cache* ldcache_parse(const char *filename)
 {
     LD_Cache *cache = NULL;
     Header header;
     Entry entry;
-    char magic[sizeof(CACHE_MAGIC) - 1];
+    char magic[sizeof(CACHE_MAGIC) - 1], path[PATH_MAX];
     off_t strPos, curPos;
     uint32_t i;
     size_t n, l;
@@ -126,6 +175,7 @@ LD_Cache* ldcache_parse(const char *filename)
         fprintf(stderr, "Failed to allocate memory for the cache: %s!\n", strerror(errno));
         goto RET;
     }
+    cache->paths = NULL;
 
     /* Allocate the cache's entries */
     if ((cache->entries = malloc(sizeof(LD_Entry) * header.lib_count)) == NULL)
@@ -165,9 +215,11 @@ LD_Cache* ldcache_parse(const char *filename)
         /* Move to the value string offset */
         lseek(fd, strPos + entry.value, SEEK_SET);
 
-        /* Read the value string */
+        /* Read the value string.
+         * Storing it in the cache is useless since we only care about the library name.
+         */
         l = length(fd);
-        if (read(fd, cache->entries[n].path, l) != l)
+        if (read(fd, path, l) != l)
         {
             fprintf(stderr, "Failed to read the entry value: %s!\n", strerror(errno));
             continue;
@@ -186,27 +238,6 @@ LD_Cache* ldcache_parse(const char *filename)
     close(fd);
 
     return cache;
-}
-
-const char* ldcache_search(const LD_Cache *cache, const char *name)
-{
-    size_t i;
-
-    /* Search for the name in the cache
-     *
-     * Note: Binary search would have been more efficient.
-     * However, I didn't find the guarantee that the ldcache would always be sorted...
-     *
-     * So it's a classic linear search.
-     */
-    for (i = 0; i < cache->length; i++)
-    {
-        if (strcmp(cache->entries[i].name, name) == 0)
-            return cache->entries[i].path;
-    }
-
-    /* Return NULL if nothing was found */
-    return NULL;
 }
 
 const char* ldcache_replacement(const LD_Cache *cache, const char *name)
@@ -233,8 +264,95 @@ const char* ldcache_replacement(const LD_Cache *cache, const char *name)
     return NULL;
 }
 
+int ldcache_search(const LD_Cache *cache, const char *name)
+{
+    size_t i;
+
+    /* Firstly, search for the library file in the system directories */
+#if defined(SYSTEM_LIBS_3)
+    if (search_file_dir(SYSTEM_LIBS_1, name))
+        return 1;
+    if (search_file_dir(SYSTEM_LIBS_2, name))
+        return 1;
+    if (search_file_dir(SYSTEM_LIBS_3, name))
+        return 1;
+#elif defined(SYSTEM_LIBS_2)
+    if (search_file_dir(SYSTEM_LIBS_1, name))
+        return 1;
+    if (search_file_dir(SYSTEM_LIBS_2, name))
+        return 1;
+#elif defined(SYSTEM_LIBS_1)
+    if (search_file_dir(SYSTEM_LIBS_1, name))
+        return 1;
+#endif
+
+    /* Then, search it in the saved paths */
+    if (cache->paths != NULL)
+    {
+        for (i = 0; i < cache->pathlen; i++)
+        {
+            if (search_file_dir(cache->paths[i].path, name))
+                return 1;
+        }
+    }
+
+    /* Finally, search for the name in the cache.
+     *
+     * Note: Binary search would have been more efficient.
+     * However, I didn't find the guarantee that the ldcache would always be sorted...
+     *
+     * So it's a classic linear search.
+     */
+    for (i = 0; i < cache->length; i++)
+    {
+        if (strcmp(cache->entries[i].name, name) == 0)
+            return 1;
+    }
+
+    /* Return zero if nothing was found */
+    return 0;
+}
+
+int ldcache_setpath(LD_Cache *cache, const char *path, const char *filename)
+{
+    size_t i, j, count = 1;
+    const size_t len = strlen(path);
+
+    /* Count the number of entries in the path (separated by colons) */
+    for (i = 0; i < len; i++)
+    {
+        if (path[i] == ':')
+            count++;
+    }
+
+    /* Allocate the paths, assuming the path is not already allocated! */
+    if ((cache->paths = malloc(sizeof(LD_Path) * count)) == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for the paths: %s!\n", strerror(errno));
+        return 0;
+    }
+
+    /* Set the cache's number of paths */
+    cache->pathlen = count;
+
+    /* Process the paths */
+    count = j = 0;
+    for (i = 0; i < len; i++)
+    {
+        if (path[i] == ':')
+        {
+            rpath_origin(filename, path + count, cache->paths[j++].path, i);
+            count = ++i;
+        }
+    }
+    rpath_origin(filename, path + count, cache->paths[j++].path, i);
+
+    return 1;
+}
+
 void ldcache_free(LD_Cache *cache)
 {
     free(cache->entries);
+    free(cache->paths);
     free(cache);
 }

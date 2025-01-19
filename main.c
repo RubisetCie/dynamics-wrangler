@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "dynamic.h"
 
 static void usage(char *progname)
@@ -41,6 +42,7 @@ int main(int argc, char *const argv[])
     const char *needNew = NULL;
     const char *rpath = NULL;
     const char *filename = NULL;
+    char *filenameSafe = NULL;
     LD_Cache *ldcache = NULL;
     Priority priority = PRI_UNCHANGED;
     Query query = QU_NOTHING;
@@ -149,6 +151,19 @@ int main(int argc, char *const argv[])
         }
     }
 
+    /* Handle the case in which the filename is relative and doesn't contains slash */
+    if (strchr(filename, '/') == NULL)
+    {
+        if ((filenameSafe = malloc(PATH_MAX)) == NULL)
+        {
+            fprintf(stderr, "Failed to allocate memory for the filename: %s!\n", strerror(errno));
+            return 3;
+        }
+        strcpy(filenameSafe, "./");
+        strcat(filenameSafe, filename);
+        filename = filenameSafe;
+    }
+
     /* Read the LD cache, to determine whether a library is found or not */
     if (needNew != NULL || query == QU_MISSING || query == QU_REPLACEMENT || fix != 0)
         ldcache = ldcache_parse("/etc/ld.so.cache");
@@ -162,5 +177,6 @@ int main(int argc, char *const argv[])
     if (ldcache != NULL)
         ldcache_free(ldcache);
 
+    free(filenameSafe);
     return i;
 }

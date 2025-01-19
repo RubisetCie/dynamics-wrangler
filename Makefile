@@ -14,6 +14,9 @@ SRC_FILES = \
 	elffile.c \
 	ldcache.c
 
+# Architecture
+ARCH = $(shell $(CC) -dumpmachine)
+
 # Installation prefix
 PREFIX = /usr/local
 
@@ -22,7 +25,7 @@ TARGET = dyngler
 all: $(TARGET)
 
 $(TARGET): $(SRC_FILES)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -DSYSTEM_LIBS_1='"/usr/lib"' -DSYSTEM_LIBS_2='"/usr/lib/$(ARCH)"' -o $@ $^ $(LDFLAGS)
 
 install:
 	mkdir -p $(PREFIX)/bin

@@ -32,7 +32,8 @@ static size_t available_length(const char *str, const size_t len)
         i++;
     }
 
-    return 0;
+    /* Occurs if the string is located at the very end */
+    return len - 1;
 }
 
 static void write_type(char *data, int type)
@@ -150,13 +151,13 @@ static int write_input_to_output_end(int in, int out)
     return 1;
 }
 
-int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix)
+int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix)
 {
     Elf_Header ehdr;
     Elf_Section shdr;
     Elf_Program phdr;
     size_t phdrlen, shdrlen, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
-    char *dyns = NULL, *strtab = NULL, *name;
+    char *dyns = NULL, *strtab = NULL, *sname = NULL, *name;
     int in = -1, out = -1, rv = 0, dynsmod = 0, needmod = 0, somod = 0, rmod = 0, i, j, l, last;
     const int modifications = (needOld || soname || rpath || fix > 1);
 
@@ -332,7 +333,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     /* Check if the new name is in the cache */
                     if (ldcache != NULL)
                     {
-                        if (ldcache_search(ldcache, needNew) == NULL)
+                        if (!ldcache_search(ldcache, needNew))
                             fprintf(stderr, "Warning! The library name %s was not found in the cache!\nYou may want to run `ldconfig`.\n", needNew);
                     }
 
@@ -408,7 +409,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
 
                 /* Retrieve the run-time path */
                 ADV(i, 1);
-                name = &strtab[SWAPU(&dyns[i])];
+                sname = &strtab[SWAPU(&dyns[i])];
                 ADV(i, 1);
 
                 if (last > -2)
@@ -416,7 +417,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     if (last != 2)
                         puts("");
                     last = 2;
-                    printf("· Run-time path: %s\n", name);
+                    printf("· Run-time path: %s\n", sname);
                     break;
                 }
 
@@ -435,7 +436,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
 
                     /* Compute the available length in the string table */
                     const size_t len = strlen(rpath);
-                    const size_t available = available_length(name, shdrlen - (name - strtab));
+                    const size_t available = available_length(sname, shdrlen - (sname - strtab));
                     if (len > available)
                     {
                         fputs("The new run-time path is too big to fit!\n", stderr);
@@ -445,7 +446,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     printf("Setting run-time path: %s...\n", rpath);
 
                     /* Write in the string table */
-                    write_string(name, rpath, len, available);
+                    write_string(sname, rpath, len, available);
                 }
                 break;
             default:
@@ -505,11 +506,20 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                 write_string(name, rpath, len, available);
             }
         }
+        else
+            slotnum--;
     }
 
     /* Perform late automatic fixing, if requested */
     if (fix != 0 && ldcache != NULL)
     {
+        /* Process the rpath with the origin */
+        if (sname != NULL)
+        {
+            if (!ldcache_setpath(ldcache, sname, filename))
+                fprintf(stderr, "Failed to allocate memory for the stored path: %s!\n", strerror(errno));
+        }
+
         i = 0;
         while (i < phdrlen)
         {
@@ -521,7 +531,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                 ADV(i, 1);
 
                 /* Search it in the cache */
-                if (ldcache_search(ldcache, name) != NULL)
+                if (ldcache_search(ldcache, name))
                     continue;
 
                 /* Find the closest library matching it's name and being slim enough */
@@ -537,10 +547,6 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
                     fputs("The replacement found was too big to fit!\n", stderr);
                     continue;
                 }
-
-                /* Whether the fix is actually performed, or just dry-run */
-                /*if (fix == 1)
-                    printf("Replacement found: %s => %s...\n", name, newName);*/
 
                 needmod = 1;
                 printf("Fixing needed: %s => %s...\n", name, newName);
@@ -669,7 +675,7 @@ int dynamics_process(const LD_Cache *ldcache, const Priority priority, const cha
     return rv;
 }
 
-int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query query)
+int dynamics_query(LD_Cache *ldcache, const char *filename, const Query query)
 {
     Elf_Header ehdr;
     Elf_Section shdr;
@@ -747,7 +753,26 @@ int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query qu
     /* Determine the query type */
     switch (query)
     {
-        case QU_MISSING: /* Fall below */
+        /* If querying the missing, search for the rpath */
+        case QU_MISSING:
+            i = 0;
+            while (i < phdrlen)
+            {
+                switch (SWAPS(&dyns[i]))
+                {
+                    case DT_RPATH:
+                    case DT_RUNPATH:
+                        ADV(i, 1);
+                        if (!ldcache_setpath(ldcache, &strtab[SWAPU(&dyns[i])], filename))
+                        {
+                            rv = 3; goto RET;
+                        }
+                        goto EXIT;
+                    default:
+                        ADV(i, 2);
+                }
+            }
+        EXIT: /* Fall below */
         case QU_NEEDED: type = typealt = DT_NEEDED; once = 0; break;
         case QU_SONAME: type = typealt = DT_SONAME; once = 1; break;
         case QU_RPATH: type = DT_RPATH; typealt = DT_RUNPATH; once = 1; break;
@@ -766,9 +791,12 @@ int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query qu
             name = &strtab[SWAPU(&dyns[i])];
             ADV(i, 1);
 
-            /* If the library is found in the cache, don't print it */
-            if (ldcache != NULL && ldcache_search(ldcache, name) != NULL)
-                continue;
+            /* If the library is found in the cache / rpath, don't print it */
+            if (ldcache != NULL)
+            {
+                if (ldcache_search(ldcache, name))
+                    continue;
+            }
 
             /* Write the raw output */
             puts(name);

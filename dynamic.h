@@ -30,7 +30,7 @@ typedef enum
     QU_REPLACEMENT
 } Query;
 
-int dynamics_process(const LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix);
-int dynamics_query(const LD_Cache *ldcache, const char *filename, const Query query);
+int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix);
+int dynamics_query(LD_Cache *ldcache, const char *filename, const Query query);
 
 #endif
