@@ -8,6 +8,8 @@ It's features are the following:
 - Modification of the "soname".
 - Modification of the run-time path ("rpath").
 - Changing from "rpath" to "runpath" (and the opposite) to set the priority.
+- Querying various dynamics properties (needed, soname, missing dependencies, etc).
+- Finding automatically new name of missing dependencies (via the ld.cache).
 
 Patching strings in an already compiled ELF files have a limitation: it's **impossible to replace a string with one longer than the original one, only shorter**!
 
