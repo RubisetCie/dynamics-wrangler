@@ -101,7 +101,7 @@ static const char* occurence(const char *str, const char *find)
 static void rpath_origin(const char *origin, const char *path, char *dest, const size_t len)
 {
     const char *sub = occurence(path, "$ORIGIN");
-    size_t i = 0;
+    size_t fi = 0, si = 0;
 
     if (sub != NULL)
     {
@@ -109,14 +109,17 @@ static void rpath_origin(const char *origin, const char *path, char *dest, const
         const size_t baselen = strrchr(origin, '/') - origin; /* The origin has to have a '/', since we handled that case in main */
 
         /* Replace the special variable $ORIGIN with the location of the file */
-        memcpy(dest, path, origlen); i += origlen;
-        memcpy(dest + i, origin, baselen); i += baselen;
-        memcpy(dest + i, sub + 7, len - i);
+        memcpy(dest, path, origlen); fi += origlen; si += origlen;
+        memcpy(dest + fi, origin, baselen); fi += baselen; si += 7;
+        memcpy(dest + fi, sub + 7, len - si); fi += len - si;
     }
     else
+    {
         memcpy(dest, path, len);
+        fi += len;
+    }
 
-    dest[len - i] = 0;
+    dest[fi] = 0;
 }
 
 static int search_file_dir(const char *path, const char *name)
@@ -345,6 +348,7 @@ int ldcache_setpath(LD_Cache *cache, const char *path, const char *filename)
             count = ++i;
         }
     }
+
     rpath_origin(filename, path + count, cache->paths[j++].path, i);
 
     return 1;
