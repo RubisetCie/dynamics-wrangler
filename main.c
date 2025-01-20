@@ -154,11 +154,15 @@ int main(int argc, char *const argv[])
     /* Handle the case in which the filename is relative and doesn't contains slash */
     if (strchr(filename, '/') == NULL)
     {
-        if ((filenameSafe = malloc(PATH_MAX)) == NULL)
+        if ((filenameSafe = malloc(strlen(filename) + 3)) == NULL)
         {
             fprintf(stderr, "Failed to allocate memory for the filename: %s!\n", strerror(errno));
             return 3;
         }
+
+        /* Prepend "./" as the filename has to contain at least one slash.
+         * Or else the rpath replacement of $ORIGIN won't work.
+         */
         strcpy(filenameSafe, "./");
         strcat(filenameSafe, filename);
         filename = filenameSafe;
