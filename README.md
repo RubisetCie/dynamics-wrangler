@@ -11,7 +11,7 @@ It's features are the following:
 - Querying various dynamics properties (needed, soname, missing dependencies, etc).
 - Finding automatically new name of missing dependencies (via the ld.cache).
 
-Patching strings in an already compiled ELF files have a limitation: it's **impossible to replace a string with one longer than the original one, only shorter**!
+Patching strings in an already compiled ELF files has a limitation: it's **impossible to replace a string with one longer than the original one, only shorter**!
 
 ## Building
 
