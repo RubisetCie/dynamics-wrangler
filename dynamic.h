@@ -12,6 +12,7 @@
 
 /* Special value to mean the removal of the property */
 #define REMOVAL (char*)1
+#define REP_MAXIMUM 64
 
 typedef enum
 {
@@ -30,7 +31,13 @@ typedef enum
     QU_REPLACEMENT
 } Query;
 
-int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix);
+typedef struct
+{
+    const char *old;
+    const char *new;
+} Replacement;
+
+int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const Replacement *replacements, const char *soname, const char *rpath, int fix);
 int dynamics_query(LD_Cache *ldcache, const char *filename, const Query query);
 
 #endif

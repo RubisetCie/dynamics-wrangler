@@ -151,7 +151,7 @@ static int write_input_to_output_end(int in, int out)
     return 1;
 }
 
-int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const char *needOld, const char *needNew, const char *soname, const char *rpath, int fix)
+int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *filename, const char *output, const Replacement *replacements, const char *soname, const char *rpath, int fix)
 {
     Elf_Header ehdr;
     Elf_Section shdr;
@@ -159,7 +159,7 @@ int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *fil
     size_t phdrlen, shdrlen, slotnum = 0, slots[2], slotstr[2], slotlen[2] = { 0 };
     char *dyns = NULL, *strtab = NULL, *sname = NULL, *name;
     int in = -1, out = -1, rv = 0, dynsmod = 0, needmod = 0, somod = 0, rmod = 0, i, j, l, last;
-    const int modifications = (needOld || soname || rpath || fix > 1);
+    const int modifications = (replacements[0].old || soname || rpath || fix > 1);
 
     /* Open the output file */
     if (output && modifications)
@@ -311,16 +311,28 @@ int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *fil
                     break;
                 }
 
-                if (needOld != NULL)
+                if (replacements[0].old)
                 {
-                    /* Check if this is the name to be replaced */
-                    if (strcmp(name, needOld) != 0)
+                    /* Check if this is one of the names to be replaced */
+                    const Replacement* replacement = NULL;
+
+                    for (j = 0; j < REP_MAXIMUM; j++)
+                    {
+                        if (!replacements[j].old)
+                            break;
+                        if (strcmp(name, replacements[j].old) == 0)
+                        {
+                            replacement = &replacements[j]; break;
+                        }
+                    }
+
+                    if (!replacement)
                         break;
 
                     needmod = 1;
 
                     /* Compute the available length in the string table */
-                    const size_t len = strlen(needNew);
+                    const size_t len = strlen(replacement->new);
                     const size_t available = available_length(name, shdrlen - (name - strtab));
                     if (len > available)
                     {
@@ -328,17 +340,17 @@ int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *fil
                         break;
                     }
 
-                    printf("Replacing needed: %s => %s...\n", needOld, needNew);
+                    printf("Replacing needed: %s => %s...\n", replacement->old, replacement->new);
 
                     /* Check if the new name is in the cache */
                     if (ldcache != NULL)
                     {
-                        if (!ldcache_search(ldcache, needNew))
-                            fprintf(stderr, "Warning! The library name %s was not found in the cache!\nYou may want to run `ldconfig`.\n", needNew);
+                        if (!ldcache_search(ldcache, replacement->new))
+                            fprintf(stderr, "Warning! The library name %s was not found in the cache!\nYou might want to run `ldconfig`.\n", replacement->new);
                     }
 
                     /* Write in the string table */
-                    write_string(name, needNew, len, available);
+                    write_string(name, replacement->new, len, available);
                 }
                 break;
             case DT_SONAME:
@@ -655,8 +667,8 @@ int dynamics_process(LD_Cache *ldcache, const Priority priority, const char *fil
     }
 
     /* Warn if something wanted to be done, but nothing actually was */
-    if (needOld && !needmod)
-        fprintf(stderr, "Warning! No needed library with name %s was found.\n", needOld);
+    if (replacements[0].old && !needmod)
+        fprintf(stderr, "Warning! No needed library with name %s was found.\n", replacements[0].old);
     if (soname && !somod)
         fputs("Warning! No available section was found to modify soname.\n", stderr);
     if (rpath && !rmod)

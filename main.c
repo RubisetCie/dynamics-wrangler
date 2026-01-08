@@ -17,7 +17,7 @@ static void usage(char *progname)
 Options:\n\
   -s,--soname         : Replace (or remove) the soname\n\
   -r,--rpath          : Replace (or remove) the run-time path\n\
-  -n,--replace        : Replace needed dependency by one with another name\n\
+  -n,--replace        : Replace needed dependency by one another (supports multiple)\n\
      --repair-deps    : Perform repair on dependencies (don't run on system packages)\n\
      --priority-low   : Change the run-time path priority: system libs are above\n\
      --priority-high  : Change the run-time path priority: system libs are below \n\
@@ -29,21 +29,22 @@ Options:\n\
   -o,--output         : Output file\n\
   -h,--help           : Show help usage\n\n\
 In order to replace needed dependency, supply two names:\n Example:\n\
-  -n <old-name> <new-name>\n\n\
+  -n <old-name> <new-name>\n\
+ Example with multiple replacements:\n\
+  -n <old-1> <new-1> -n <old-2> <new-2> [-n <...> <...>]\n\n\
 In order to remove soname or run-time path, don't supply a name after the parameter.\n", progname);
 }
 
 int main(int argc, char *const argv[])
 {
-    int i = 1, fix = 0;
+    int i = 1, reps = 0, fix = 0;
     const char *output = NULL;
     const char *soname = NULL;
-    const char *needOld = NULL;
-    const char *needNew = NULL;
     const char *rpath = NULL;
     const char *filename = NULL;
     char *filenameSafe = NULL;
     LD_Cache *ldcache = NULL;
+    Replacement replacements[REP_MAXIMUM] = {0};
     Priority priority = PRI_UNCHANGED;
     Query query = QU_NOTHING;
 
@@ -87,8 +88,9 @@ int main(int argc, char *const argv[])
                 fputs("Missing two names after the parameter!\n", stderr);
                 return 1;
             }
-            needOld = argv[i++];
-            needNew = argv[i++];
+            replacements[reps].old = argv[i++];
+            replacements[reps].new = argv[i++];
+            reps++;
         }
         else if (strcmp(arg, "-o") == 0 ||
                  strcmp(arg, "--output") == 0)
@@ -169,14 +171,14 @@ int main(int argc, char *const argv[])
     }
 
     /* Read the LD cache, to determine whether a library is found or not */
-    if (needNew != NULL || query == QU_MISSING || query == QU_REPLACEMENT || fix != 0)
+    if (reps > 0 || query == QU_MISSING || query == QU_REPLACEMENT || fix != 0)
         ldcache = ldcache_parse("/etc/ld.so.cache");
 
     /* If a simple query is selected */
     if (query != QU_NOTHING)
         i = dynamics_query(ldcache, filename, query);
     else
-        i = dynamics_process(ldcache, priority, filename, output, needOld, needNew, soname, rpath, fix);
+        i = dynamics_process(ldcache, priority, filename, output, replacements, soname, rpath, fix);
 
     if (ldcache != NULL)
         ldcache_free(ldcache);
